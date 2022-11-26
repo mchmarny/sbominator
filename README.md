@@ -9,6 +9,8 @@ This builder is designed to be used in Google Cloud Build pipeline. It crates a 
 
 > Optionally, this builder can be configured to generate vulnerability report based on the SBOM. 
 
+![](images/reg.png)
+
 ## Usage
 
 When signing images it's best to do it based on image digest, not image tag. When publishing the image to GCP Artifact Registry, you should also extracted the digest of the newly published image. To enable other steps in the pipeline to access that digest, write it to a temporary file like this:
@@ -46,11 +48,13 @@ Additionally, the builder can also generate vulnerability report from the SBOM, 
   - SCAN=yes
 ```
 
+![](images/build.png)
+
 A complete pipeline with the publish and SBOM generation steps is available in the [example folder](example/cloudbuild.yaml).
 
 ## Assumptions 
 
-* Service account permissions enabled for Cloud KMS in Cloud Build settings (disabled by defaults)
+* Service account permissions enabled for Cloud KMS in [Cloud Build settings](https://console.cloud.google.com/cloud-build/settings/service-account) (disabled by defaults)
 
 ## Technology 
 
