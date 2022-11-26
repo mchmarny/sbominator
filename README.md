@@ -22,9 +22,8 @@ To add the SBOM generation step to your pipeline, add the following step to your
 ```yaml
   # Generate SBOM
   - id: sbom
-    name: us-docker.pkg.dev/cloudy-demos/builders/sbom-builder:v0.2.7
+    name: us-docker.pkg.dev/cloudy-demos/builders/sbom-builder:v0.2.9
     entrypoint: /bin/bash
-    waitFor: ["prev-step"]
     env:
     - PROJECT=$PROJECT_ID
     - REGISTRY=${LOCATION}-docker.pkg.dev
