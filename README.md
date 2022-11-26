@@ -48,9 +48,9 @@ Additionally, the builder can also generate vulnerability report from the SBOM, 
   - SCAN=yes
 ```
 
-![](images/build.png)
+A complete pipeline with all the steps in below image is available in the [example folder](example/cloudbuild.yaml).
 
-A complete pipeline with the publish and SBOM generation steps is available in the [example folder](example/cloudbuild.yaml).
+![](images/build.png)
 
 ## Assumptions 
 
