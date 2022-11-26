@@ -1,0 +1,116 @@
+# WORK IN PROGRESS
+# Overview: release via Google Cloud Deploy for GKE
+# Requires git commit triggering to populate COMMIT_SHA variable
+# Sample code repo: https://github.com/mchmarny/hello
+
+substitutions:
+  _APP_NAME: hello
+  _PIPELINE_NAME: deploy-demo-pipeline
+  _POOL_NAME: demo-pool
+
+steps:
+  # Go test
+  - id: test
+    name: golang:1.19
+    env:
+    - GO111MODULE=on
+    entrypoint: /bin/bash
+    args: ["-c", "make test"]
+
+  # Scan code 
+  - id: scan
+    name: snyk/snyk:golang
+    entrypoint: /bin/bash
+    waitFor: ["test"]
+    args:
+    - '-c'
+    - |-
+      snyk config set api=$$SNYK_TOKEN
+      snyk test --severity-threshold=medium
+    secretEnv: ['SNYK_TOKEN']
+
+  # Build image
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    entrypoint: /bin/bash
+    waitFor: ["scan"]
+    args:
+    - -c
+    - |
+      docker build --build-arg VERSION=${TAG_NAME} \
+        -t "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${COMMIT_SHA}" \
+        -t "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${TAG_NAME}" \
+        .
+  
+  # Publish image, get sha256
+  - id: publish
+    name: gcr.io/cloud-builders/docker
+    entrypoint: /bin/bash
+    waitFor: ["build"]
+    args:
+    - -c
+    - |
+      docker push "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${TAG_NAME}" &&
+      docker image inspect "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${TAG_NAME}" --format '{{index .RepoDigests 0}}' > image-digest.txt && 
+      cat image-digest.txt
+
+  # Test against my vulnerability policy
+  - id: vulnsign
+    name: gcr.io/$PROJECT_ID/kritis-signer
+    entrypoint: /bin/bash
+    waitFor: ["publish"]
+    args:
+    - -c
+    - |
+      /kritis/signer \
+      -v=10 \
+      -alsologtostderr \
+      -image=$(/bin/cat image-digest.txt) \
+      -policy=./policy/kritis/vulnz-signing-policy.yaml \
+      -kms_key_name=${_KMS_KEY_NAME} \
+      -kms_digest_alg=${_KMS_DIGEST_ALG} \
+      -note_name=${_NOTE_NAME}
+
+  # Generate SBOM
+  - id: sbom
+    name: us-docker.pkg.dev/cloudy-demos/builders/sbom-builder:v0.2.9
+    entrypoint: /bin/bash
+    waitFor: ["vulnsign"]
+    env:
+    - PROJECT=$PROJECT_ID
+    - REGISTRY=${LOCATION}-docker.pkg.dev
+    - KEY=$_KMS_KEY_NAME
+    - COMMIT=$COMMIT_SHA # optional
+    - VERSION=$TAG_NAME  # optional
+    # - SCAN=yes # optional, if set, builder will run vulnerability scan on SBOM and upload report to registry 
+    args:
+    - -c
+    - |
+      /usr/local/bin/builder $(/bin/cat image-digest.txt)
+
+  # Create release in Google Cloud Deploy
+  - id: release
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: /bin/bash
+    waitFor: ["sbom"]
+    args:
+    - -c
+    - |
+      gcloud deploy releases create rel-${SHORT_SHA} \
+      --delivery-pipeline=${_PIPELINE_NAME} \
+      --region=${LOCATION} \
+      --annotations=commitId=${REVISION_ID} \
+      --images=${_APP_NAME}=$(/bin/cat image-digest.txt)
+
+availableSecrets:
+  secretManager:
+  - versionName: projects/799736955886/secrets/snyk-token/versions/1
+    env: 'SNYK_TOKEN'
+
+images:
+- ${LOCATION}-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$_APP_NAME:$TAG_NAME
+
+options:
+  requestedVerifyOption: VERIFIED
+  pool:
+    name: 'projects/$PROJECT_ID/locations/$LOCATION/workerPools/$_POOL_NAME'
