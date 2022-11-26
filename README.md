@@ -52,6 +52,17 @@ A complete pipeline with the publish and SBOM generation steps is available in t
 
 * Service account permissions enabled for Cloud KMS in Cloud Build settings (disabled by defaults)
 
+## Technology 
+
+This builder uses following open source projects:
+
+* [cosign](https://github.com/sigstore/cosign) for signing
+* [syft](https://github.com/anchore/syft) for SBOM generation 
+* [grype](https://github.com/anchore/grype) for vulnerability scans 
+* [crane](https://github.com/michaelsauter/crane) for registry queries 
+* [alpine](https://github.com/alpinelinux) Linux as base image
+
+Additionally, this builder users Google Cloud CLI ([gcloud](https://cloud.google.com/sdk/gcloud)) for environment configuration.
 
 ## Disclaimer
 
