@@ -2,29 +2,18 @@
 
 set -o errexit
 
-# image ref (tag or sha)
+# image URI (registry/image@sha:*** or ar/registry/image@sha:***)
 IMAGE=$1
 
-msg(){ echo "
-${1}
--------------------------------------------------------------------------------
-";}
-
-echo "
-===============================================================================
-loud Build SBOM Builder
-===============================================================================
-"
-
-msg "Validating input"
-
 # check required input parameters
-[ -z "$IMAGE" ] && echo "image not provided\n" && exit 1
-[ -z "$PROJECT" ] && echo "env var PROJECT not set (e.g. my-project-id)\n" && exit 1
-[ -z "$REGISTRY" ] && echo "env var REGISTRY not set (e.g. us-west1-docker.pkg.dev)\n" && exit 1
-[ -z "$KEY" ] && echo "env var KEY not set (e.g. projects/project/locations/us-west1/keyRings/mykey/cryptoKeys/img-signer/cryptoKeyVersions/1)\n" && exit 1
+[ -z "$IMAGE" ] && echo "image URI env var not set\n" && exit 1
+[ -z "$PROJECT" ] && echo "env var PROJECT env var not set\n" && exit 1
+[ -z "$KEY" ] && echo "env var KEY env var not set\n" && exit 1
 
+# parse registry from image 
+REGISTRY=$(echo $IMAGE | cut -d'/' -f 1)
 
+# print run variables 
 echo "PROJECT:  $PROJECT"
 echo "REGISTRY: $REGISTRY"
 echo "IMAGE:    $IMAGE"
@@ -33,19 +22,19 @@ echo "VERSION:  $VERSION" # optional
 echo "COMMIT:   $COMMIT"  # optional
 echo "SCAN:     $SCAN"  # optional
 
-msg "Configururing builder"
+# confgure gcloud 
 gcloud auth configure-docker $REGISTRY --quiet
 gcloud config set project $PROJECT
 
+# ensure local public key 
 KEY="gcpkms://${KEY}"
 cosign generate-key-pair --kms $KEY
 
-msg "Signing container image"
-
+# parse optional parameters 
 VERSION_ARG=""
 if [ -z "$VERSION_ARG" ]
 then
-      echo "VERSION not set, skipping"
+      echo "(optional) VERSION not set"
 else
       VERSION_ARG="-a version=$VERSION"
 fi
@@ -53,34 +42,36 @@ fi
 COMMIT_ARG=""
 if [ -z "$COMMIT_ARG" ]
 then
-      echo "COMMIT not set, skipping"
+      echo "(optional) COMMIT not set"
 else
       COMMIT_ARG="-a commit=$COMMIT"
 fi
 
+# sign and verify image 
 cosign sign --key $KEY $VERSION_ARG $COMMIT_ARG $IMAGE
 cosign verify --key $KEY $IMAGE
 
-msg "Generating SBOM from image and publish attestation"
+# gen SBOM from image
 syft --scope all-layers -o spdx-json=sbom.spdx.json $IMAGE | jq --compact-output > sbom.spdx.json
+
+# upload attestation of the sbom 
 cosign attest --predicate sbom.spdx.json --key $KEY $IMAGE
 
+# vuln scan
 if [ -n "${SCAN}" ]; then
-    msg "Scan for vulnerabilities using SBOM"
-    grype --add-cpes-if-none sbom:sbom.spdx.json -o json | jq --compact-output > vulns.grype.json
-    cat vulns.grype.json
+then
+      echo "(optional) vulnerability SCAN not set"
+else
+      echo "Scanning for vulnerabilities using SBOM..."
+      grype --add-cpes-if-none sbom:sbom.spdx.json -o json | jq --compact-output > vulns.grype.json
+      cat vulns.grype.json
 
-    msg "Uploading vulnerabilities report to registry"
-    SHA_TAG=$(echo $IMAGE | tr ':' '-' | tr '@' ':')
-    VULN_TAG="${SHA_TAG}.vuln"
-    cosign upload blob -f sbom.spdx.json $VULN_TAG
+      # parse a tag from sha 
+      SHA_TAG=$(echo $IMAGE | tr ':' '-' | tr '@' ':')
+      VULN_TAG="${SHA_TAG}.vuln"
+      cosign upload blob -f vulns.grype.json $VULN_TAG
 
-    msg "Signing vulnerabilities report"
-    cosign sign --key $KEY $VULN_TAG
-    cosign verify --key $KEY $VULN_TAG
+      # sign and verify the 
+      cosign sign --key $KEY $VULN_TAG
+      cosign verify --key $KEY $VULN_TAG
 fi
-
-echo "DONE"
-
-
-

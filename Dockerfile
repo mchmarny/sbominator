@@ -1,4 +1,4 @@
-FROM alpine
+FROM alpine:3.17
 
 # core packages + py for gcloud
 RUN apk add --no-cache bash curl docker jq cosign ca-certificates python3 
