@@ -32,7 +32,7 @@ cosign generate-key-pair --kms $KEY
 
 # parse optional parameters 
 VERSION_ARG=""
-if [ -z "$VERSION_ARG" ]
+if [ -n "${VERSION}" ]
 then
       echo "(optional) VERSION not set"
 else
@@ -40,7 +40,7 @@ else
 fi
 
 COMMIT_ARG=""
-if [ -z "$COMMIT_ARG" ]
+if [ -n "${COMMIT}" ]
 then
       echo "(optional) COMMIT not set"
 else
