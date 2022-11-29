@@ -16,10 +16,6 @@ dist
 cosign.*
 *.pem
 
-# syft/grype
-sbom.spdx.json
-vuln.grype.json
-
 # docker 
 digest.txt
 
