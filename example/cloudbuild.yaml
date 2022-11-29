@@ -73,7 +73,7 @@ steps:
 
   # Generate SBOM
   - id: sbom
-    name: us-docker.pkg.dev/cloudy-demos/builders/sbom-builder:v0.3.2
+    name: us-docker.pkg.dev/cloudy-demos/builders/sbom-builder:v0.3.4
     entrypoint: /bin/bash
     waitFor: ["vulnsign"]
     env:
