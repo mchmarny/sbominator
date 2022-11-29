@@ -58,7 +58,7 @@ syft --scope all-layers -o spdx-json=sbom.spdx.json $IMAGE | jq --compact-output
 cosign attest --predicate sbom.spdx.json --key $KEY $IMAGE
 
 # vuln scan
-if [ -n "${SCAN}" ]; then
+if [ -n "${SCAN}" ]
 then
       echo "(optional) vulnerability SCAN not set"
 else
