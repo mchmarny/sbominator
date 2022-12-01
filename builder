@@ -9,6 +9,8 @@ IMAGE=$1
 [ -z "$IMAGE" ] && echo "image URI env var not set\n" && exit 1
 [ -z "$PROJECT" ] && echo "env var PROJECT env var not set\n" && exit 1
 [ -z "$KEY" ] && echo "env var KEY env var not set\n" && exit 1
+[ -z "$VERSION" ] && echo "env var VERSION env var not set\n" && exit 1
+[ -z "$COMMIT" ] && echo "env var COMMIT env var not set\n" && exit 1
 
 # parse registry from image 
 REGISTRY=$(echo $IMAGE | cut -d'/' -f 1)
@@ -18,9 +20,8 @@ echo "PROJECT:  $PROJECT"
 echo "REGISTRY: $REGISTRY"
 echo "IMAGE:    $IMAGE"
 echo "KEY:      $KEY"
-echo "VERSION:  $VERSION" # optional
-echo "COMMIT:   $COMMIT"  # optional
-echo "SCAN:     $SCAN"  # optional
+echo "VERSION:  $VERSION"
+echo "COMMIT:   $COMMIT"
 
 # confgure gcloud 
 gcloud auth configure-docker $REGISTRY --quiet
@@ -30,25 +31,8 @@ gcloud config set project $PROJECT
 KEY="gcpkms://${KEY}"
 cosign generate-key-pair --kms $KEY
 
-# parse optional parameters 
-VERSION_ARG=""
-if [ -n "${VERSION}" ]
-then
-      echo "(optional) VERSION not set"
-else
-      VERSION_ARG="-a version=$VERSION"
-fi
-
-COMMIT_ARG=""
-if [ -n "${COMMIT}" ]
-then
-      echo "(optional) COMMIT not set"
-else
-      COMMIT_ARG="-a commit=$COMMIT"
-fi
-
 # sign and verify image 
-cosign sign --key $KEY $VERSION_ARG $COMMIT_ARG $IMAGE
+cosign sign --key $KEY -a "version=${VERSION}" -a "commit=${COMMIT}" $IMAGE
 cosign verify --key $KEY $IMAGE
 
 # generate SBOM from image and attach it as attestation to the image
@@ -60,4 +44,4 @@ grype --add-cpes-if-none sbom:sbom.spdx.json -o json | jq --compact-output > vul
 cosign attest --predicate vulns.grype.json --key $KEY $IMAGE
 
 # verifying all image attestations but skip payload to avoid logging ton of JSON"
-cosign verify-attestation --key $(SIGN_KEY) $(IMAGE_SHA) | jq '.payloadType'
+cosign verify-attestation --key $KEY $IMAGE | jq '.payloadType'

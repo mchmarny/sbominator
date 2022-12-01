@@ -21,7 +21,7 @@ To add the SBOM generation to your pipeline, add the following step to your pipe
 
 ```yaml
 - id: sbom
-  name: us-docker.pkg.dev/cloudy-demos/builders/sbom-builder:v0.3.5
+  name: us-docker.pkg.dev/cloudy-demos/builders/sbom-builder:v0.3.7
   entrypoint: /bin/bash
   env:
   - PROJECT=$PROJECT_ID

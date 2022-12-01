@@ -1,8 +1,3 @@
-# WORK IN PROGRESS
-# Overview: release via Google Cloud Deploy for GKE
-# Requires git commit triggering to populate COMMIT_SHA variable
-# Sample code repo: https://github.com/mchmarny/hello
-
 substitutions:
   _APP_NAME: hello
   _PIPELINE_NAME: deploy-demo-pipeline
@@ -15,10 +10,13 @@ steps:
     env:
     - GO111MODULE=on
     entrypoint: /bin/bash
-    args: ["-c", "make test"]
+    args:
+    - '-c'
+    - |
+      make test
 
-  # Scan code 
-  - id: scan
+  # Static code analysis
+  - id: analyze
     name: snyk/snyk:golang
     entrypoint: /bin/bash
     waitFor: ["test"]
@@ -33,13 +31,14 @@ steps:
   - id: build
     name: gcr.io/cloud-builders/docker
     entrypoint: /bin/bash
-    waitFor: ["scan"]
+    waitFor: ["analyze"]
     args:
     - -c
     - |
       docker build --build-arg VERSION=${TAG_NAME} \
         -t "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${COMMIT_SHA}" \
         -t "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${TAG_NAME}" \
+        -t "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:latest" \
         .
   
   # Publish image, get sha256
@@ -54,11 +53,26 @@ steps:
       docker image inspect "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${TAG_NAME}" --format '{{index .RepoDigests 0}}' > image-digest.txt && 
       cat image-digest.txt
 
-  # Test against my vulnerability policy
-  - id: vulnsign
-    name: gcr.io/$PROJECT_ID/kritis-signer
+  # Generate SBOM (includes vulnerability scan)
+  - id: sbom
+    name: us-docker.pkg.dev/cloudy-demos/builders/sbom-builder:v0.3.6
     entrypoint: /bin/bash
     waitFor: ["publish"]
+    env:
+    - PROJECT=$PROJECT_ID
+    - KEY=$_KMS_KEY_NAME
+    - COMMIT=$COMMIT_SHA
+    - VERSION=$TAG_NAME
+    args:
+    - -c
+    - |
+      builder $(/bin/cat image-digest.txt)
+
+  # Test against my vulnerability policy
+  - id: policy
+    name: gcr.io/$PROJECT_ID/kritis-signer
+    entrypoint: /bin/bash
+    waitFor: ["sbom"]
     args:
     - -c
     - |
@@ -71,26 +85,11 @@ steps:
       -kms_digest_alg=${_KMS_DIGEST_ALG} \
       -note_name=${_NOTE_NAME}
 
-  # Generate SBOM
-  - id: sbom
-    name: us-docker.pkg.dev/cloudy-demos/builders/sbom-builder:v0.3.5
-    entrypoint: /bin/bash
-    waitFor: ["vulnsign"]
-    env:
-    - PROJECT=$PROJECT_ID
-    - KEY=$_KMS_KEY_NAME
-    - COMMIT=$COMMIT_SHA
-    - VERSION=$TAG_NAME
-    args:
-    - -c
-    - |
-      builder $(/bin/cat image-digest.txt)
-
   # Create release in Google Cloud Deploy
   - id: release
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: /bin/bash
-    waitFor: ["sbom"]
+    waitFor: ["policy"]
     args:
     - -c
     - |
@@ -109,6 +108,11 @@ images:
 - ${LOCATION}-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$_APP_NAME:$TAG_NAME
 
 options:
-  requestedVerifyOption: VERIFIED
+  requestedVerifyOption: VERIFIED # ensure attestation gen, provenance metadata, for this build
+  sourceProvenanceHash: ["SHA256"]
   pool:
     name: 'projects/$PROJECT_ID/locations/$LOCATION/workerPools/$_POOL_NAME'
+
+tags:
+- demo
+- hello
