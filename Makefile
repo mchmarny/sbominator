@@ -42,19 +42,17 @@ builder: ## Build and publishes builder image
 	@echo "Sign and verify image"
 	cosign sign --key $(SIGN_KEY) -a version=$(VERSION) -a commit=$(COMMIT) $(IMAGE_SHA)
 	cosign verify --key $(SIGN_KEY) $(IMAGE_SHA)
-	
-	@echo "\nGenerate SBOM from image and publish attestation"
-	syft --scope all-layers -o spdx-json=sbom.spdx.json $(IMAGE_SHA) \
-		| jq --compact-output > sbom.spdx.json 
+
+	@echo "Generate SBOM from image and attach it as attestation to the image"
+	syft --scope all-layers -o spdx-json=sbom.spdx.json $(IMAGE_SHA) | jq --compact-output > sbom.spdx.json
 	cosign attest --predicate sbom.spdx.json --key $(SIGN_KEY) $(IMAGE_SHA)
 
-.PHONY: builder
+	@echo "Scan packages in SBOM for vulnerabilities and attach report as attestation to the image"
+	grype --add-cpes-if-none sbom:sbom.spdx.json -o json | jq --compact-output > vulns.grype.json
+	cosign attest --predicate vulns.grype.json --key $(SIGN_KEY) $(IMAGE_SHA)
 
-
-vulns: ## Outputs list of vulnerabilities 		
-	grype --add-cpes-if-none sbom:sbom.spdx.json -o json \
-		| jq --compact-output > vuln.grype.json
-	cat vuln.grype.json | jq -r '["ID","DESCRIPTION"], (.matches[] | [ .vulnerability.id, .vulnerability.description ]) | @tsv'
+	@echo "Verifying all image attestations "
+	cosign verify-attestation --key $(SIGN_KEY) $(IMAGE_SHA) | jq '.payloadType'
 
 .PHONY: builder
 

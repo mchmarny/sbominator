@@ -2,12 +2,10 @@
 
 This builder is designed to be used in Google Cloud Build pipeline. It crates a Software Bill of Materials (SBOM) from a previously built image in GCP Artifact Registry. When executed in your pipeline, it will:
 
-* Sign and verify provided image based on its digest
-* Publish image signature to the registry
+* Sign image based on its digest
 * Generate SBOM file for all image layers in JSON format ([SPDX schema ](https://github.com/spdx/spdx-spec/blob/v2.2/schemas/spdx-schema.json))
-* Create SBOM attestation and publish it to registry
-
-> Optionally, this builder can be configured to generate vulnerability report based on the SBOM. 
+* Create attestation for that container image with the SBOM as predicate, and push it to registry 
+* Scan SBOM for vulnerabilities, create attestation for that report, and push it to registry 
 
 ![](images/reg.png)
 
@@ -19,33 +17,24 @@ When signing images it's best to do it based on image digest, not image tag. Whe
 docker image inspect $IMAGE_TAG --format '{{index .RepoDigests 0}}' > image-digest.txt
 ```
 
-To add the SBOM generation step to your pipeline, add the following step to your pipeline, anywhere after the image is published and the digest is written to file:
+To add the SBOM generation to your pipeline, add the following step to your pipeline, anywhere after the image is published and the digest is written to file:
 
 ```yaml
 - id: sbom
-  name: us-docker.pkg.dev/cloudy-demos/builders/sbom-builder:v0.3.4
+  name: us-docker.pkg.dev/cloudy-demos/builders/sbom-builder:v0.3.5
   entrypoint: /bin/bash
   env:
   - PROJECT=$PROJECT_ID
   - KEY=$_KMS_KEY_NAME
+  - COMMIT=$COMMIT_SHA
+  - VERSION=$TAG_NAME
   args:
   - -c
   - |
     builder $(/bin/cat image-digest.txt)
 ```
 
-Optionally, you can also add image tag (`COMMIT`) and commit sha (`VERSION`) during image signing. The built-in variables are always available for tag-triggered pipelines: 
-
-```yaml
-  - COMMIT=$COMMIT_SHA # optional
-  - VERSION=$TAG_NAME  # optional
-```
-
-Additionally, the builder can also generate vulnerability report from the SBOM, and upload the signed report to registry. To enable that option, set the `SCAN` variable to any non-empty string: 
-
-```yaml
-  - SCAN=yes
-```
+> Both `COMMIT` sha `VERSION` tag are automatically included variables for for tag-triggered pipelines: 
 
 A complete pipeline with all the steps in below image is available in the [example folder](example/cloudbuild.yaml).
 

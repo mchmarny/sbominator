@@ -51,27 +51,13 @@ fi
 cosign sign --key $KEY $VERSION_ARG $COMMIT_ARG $IMAGE
 cosign verify --key $KEY $IMAGE
 
-# gen SBOM from image
+# generate SBOM from image and attach it as attestation to the image
 syft --scope all-layers -o spdx-json=sbom.spdx.json $IMAGE | jq --compact-output > sbom.spdx.json
-
-# upload attestation of the sbom 
 cosign attest --predicate sbom.spdx.json --key $KEY $IMAGE
 
-# vuln scan
-if [ -n "${SCAN}" ]
-then
-      echo "(optional) vulnerability SCAN not set"
-else
-      echo "Scanning for vulnerabilities using SBOM..."
-      grype --add-cpes-if-none sbom:sbom.spdx.json -o json | jq --compact-output > vulns.grype.json
-      cat vulns.grype.json
+# scan packages in SBOM for vulnerabilities and attach report as attestation to the image
+grype --add-cpes-if-none sbom:sbom.spdx.json -o json | jq --compact-output > vulns.grype.json
+cosign attest --predicate vulns.grype.json --key $KEY $IMAGE
 
-      # parse a tag from sha 
-      SHA_TAG=$(echo $IMAGE | tr ':' '-' | tr '@' ':')
-      VULN_TAG="${SHA_TAG}.vuln"
-      cosign upload blob -f vulns.grype.json $VULN_TAG
-
-      # sign and verify the 
-      cosign sign --key $KEY $VULN_TAG
-      cosign verify --key $KEY $VULN_TAG
-fi
+# verifying all image attestations but skip payload to avoid logging ton of JSON"
+cosign verify-attestation --key $(SIGN_KEY) $(IMAGE_SHA) | jq '.payloadType'
