@@ -12,6 +12,7 @@ RUN apk add --no-cache bash curl docker jq cosign ca-certificates python3
 ENV CLOUDSDK_INSTALL_DIR /gcloud/
 RUN curl -sSL https://sdk.cloud.google.com | bash
 ENV PATH $PATH:/gcloud/google-cloud-sdk/bin/
+RUN gcloud components install beta --quiet 
 
 # anchore tool
 RUN curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin

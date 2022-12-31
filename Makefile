@@ -47,7 +47,7 @@ builder: ## Build and publishes builder image
 	cosign verify --key $(CO_KEY) $(IMAGE_SHA)
 
 	@echo "Generate SBOM from image and attach it as attestation to the image"
-	syft -o spdx-json=sbom.spdx.json $(IMAGE_SHA) | jq --compact-output > sbom.spdx.json
+	syft -q -o spdx-json=sbom.spdx.json $(IMAGE_SHA) | jq --compact-output > sbom.spdx.json
 	cosign attest --predicate sbom.spdx.json --type spdx --key $(CO_KEY) $(IMAGE_SHA)
 
 	@echo "Verifying all image attestations "

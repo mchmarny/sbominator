@@ -40,7 +40,7 @@ echo "Signing image..."
 cosign sign --key $CO_KEY -a "version=${VERSION}" -a "commit=${COMMIT}" $IMAGE
 
 echo "Generate SBOM..."
-syft --quiet -o spdx-json=sbom.spdx.json $IMAGE | jq --compact-output > sbom.spdx.json
+syft -q -o spdx-json=sbom.spdx.json $IMAGE | jq --compact-output > sbom.spdx.json
 
 echo "Adding SBOM attestation..."
 cosign attest --predicate sbom.spdx.json --type spdxjson --key $CO_KEY $IMAGE
