@@ -2,4 +2,4 @@
 
 set -o errexit
 
-echo "Hello world"
+echo "Hello world (version: v0.3.9)"

@@ -1,25 +1,21 @@
-FROM alpine:3.17
+ARG BASE=cgr.dev/chainguard/alpine-base
+ARG VERSION=v0.0.1-default
+
+FROM ${BASE}
+LABEL sbominator.version="${VERSION}"
 
 # core packages + py for gcloud
+RUN echo -e "\nhttp://dl-cdn.alpinelinux.org/alpine/v3.17/community" >> /etc/apk/repositories
 RUN apk add --no-cache bash curl docker jq cosign ca-certificates python3 
 
 # gcloud
-RUN mkdir -p /builder && \
-    wget -qO- https://dl.google.com/dl/cloudsdk/release/google-cloud-sdk.tar.gz | tar zxv -C /builder && \
-    /builder/google-cloud-sdk/install.sh --usage-reporting=false \
-        --bash-completion=false \
-        --disable-installation-options
+ENV CLOUDSDK_INSTALL_DIR /gcloud/
+RUN curl -sSL https://sdk.cloud.google.com | bash
+ENV PATH $PATH:/gcloud/google-cloud-sdk/bin/
 
-# add gcloud to path 
-ENV PATH=/builder/google-cloud-sdk/bin/:$PATH
-
-# anchore tools 
+# anchore tool
 RUN curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
-RUN curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
 
-# crane
-RUN curl -L -o crane https://github.com/michaelsauter/crane/releases/download/v3.6.1/crane_linux_amd64 && chmod +x crane && mv crane /usr/local/bin/crane
-
-
+# sbominator
 COPY builder /usr/local/bin
 ENTRYPOINT ["/usr/local/bin/builder"]

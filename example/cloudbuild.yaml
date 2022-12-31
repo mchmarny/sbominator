@@ -2,39 +2,17 @@ substitutions:
   _APP_NAME: hello
   _PIPELINE_NAME: deploy-demo-pipeline
   _POOL_NAME: demo-pool
+  _BIN_AUTHZ_ID: projects/cloudy-labz/attestors/sbominator
 
 steps:
-  # Go test
-  - id: test
-    name: golang:1.19
-    env:
-    - GO111MODULE=on
-    entrypoint: /bin/bash
-    args:
-    - '-c'
-    - |
-      make test
-
-  # Static code analysis
-  - id: analyze
-    name: snyk/snyk:golang
-    entrypoint: /bin/bash
-    waitFor: ["test"]
-    args:
-    - '-c'
-    - |-
-      snyk config set api=$$SNYK_TOKEN
-      snyk test --severity-threshold=medium
-    secretEnv: ['SNYK_TOKEN']
 
   # Build image
   - id: build
     name: gcr.io/cloud-builders/docker
     entrypoint: /bin/bash
-    waitFor: ["analyze"]
     args:
     - -c
-    - |
+    - |-
       docker build --build-arg VERSION=${TAG_NAME} \
         -t "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${COMMIT_SHA}" \
         -t "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${TAG_NAME}" \
@@ -48,9 +26,10 @@ steps:
     waitFor: ["build"]
     args:
     - -c
-    - |
-      docker push "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${TAG_NAME}" &&
-      docker image inspect "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${TAG_NAME}" --format '{{index .RepoDigests 0}}' > image-digest.txt && 
+    - |-
+      docker push "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${TAG_NAME}"
+      docker image inspect "${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${_APP_NAME}:${TAG_NAME}" \
+        --format '{{index .RepoDigests 0}}' > image-digest.txt 
       cat image-digest.txt
 
   # Generate SBOM (includes vulnerability scan)
@@ -63,27 +42,11 @@ steps:
     - KEY=$_KMS_KEY_NAME
     - COMMIT=$COMMIT_SHA
     - VERSION=$TAG_NAME
+    - ATTESTOR=$_BIN_AUTHZ_ID # optional - to add binary attestation
     args:
     - -c
     - |
       builder $(/bin/cat image-digest.txt)
-
-  # Test against my vulnerability policy
-  - id: policy
-    name: gcr.io/$PROJECT_ID/kritis-signer
-    entrypoint: /bin/bash
-    waitFor: ["sbom"]
-    args:
-    - -c
-    - |
-      /kritis/signer \
-      -v=10 \
-      -alsologtostderr \
-      -image=$(/bin/cat image-digest.txt) \
-      -policy=./policy/kritis/vulnz-signing-policy.yaml \
-      -kms_key_name=${_KMS_KEY_NAME} \
-      -kms_digest_alg=${_KMS_DIGEST_ALG} \
-      -note_name=${_NOTE_NAME}
 
   # Create release in Google Cloud Deploy
   - id: release
@@ -99,11 +62,6 @@ steps:
       --annotations=commitId=${REVISION_ID} \
       --images=${_APP_NAME}=$(/bin/cat image-digest.txt)
 
-availableSecrets:
-  secretManager:
-  - versionName: projects/799736955886/secrets/snyk-token/versions/1
-    env: 'SNYK_TOKEN'
-
 images:
 - ${LOCATION}-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$_APP_NAME:$TAG_NAME
 
@@ -115,4 +73,3 @@ options:
 
 tags:
 - demo
-- hello

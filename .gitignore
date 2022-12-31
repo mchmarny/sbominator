@@ -19,4 +19,7 @@ cosign.*
 # docker 
 digest.txt
 
+# builder 
+.image
+
 
