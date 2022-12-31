@@ -1,13 +1,13 @@
-VERSION     ?=$(shell cat .version)
-COMMIT      ?=$(shell git rev-parse --short HEAD)
-NAME        ?=sbominator
-PROJECT_ID  ?=cloudy-demos
-REGION      ?=us-west1
-REG_URI     ?=$(REGION)-docker.pkg.dev
-REG_PATH    ?=builders/$(NAME)
-KMS_RING    ?=$(NAME)
-KMS_KEY     ?=$(NAME)-signer
-KMS_VERSION ?=1
+VERSION     :=$(shell cat .version)
+COMMIT      :=$(shell git rev-parse --short HEAD)
+NAME        :=sbominator
+PROJECT_ID  :=cloudy-tools
+REGION      :=us-west1
+REG_URI     :=us-docker.pkg.dev
+REG_PATH    :=builders/$(NAME)
+KMS_RING    :=$(NAME)
+KMS_KEY     :=$(NAME)-signer
+KMS_VERSION :=1
 
 # derived variables 
 KEY_PATH    ?=$(KMS_RING)/cryptoKeys/$(KMS_KEY)/cryptoKeyVersions/$(KMS_VERSION)
@@ -74,27 +74,28 @@ setup:
 	gcloud services enable \
 		artifactregistry.googleapis.com \
 		binaryauthorization.googleapis.com \
+		cloudkms.googleapis.com \
 		container.googleapis.com \
 		containerregistry.googleapis.com \
 		containerscanning.googleapis.com \
 		containersecurity.googleapis.com
 
-	# gcloud kms keyrings create $(KMS_RING) \
-	# 	--project $(PROJECT_ID) \
-	# 	--location $(REGION)
+	gcloud kms keyrings create $(KMS_RING) \
+		--project $(PROJECT_ID) \
+		--location $(REGION)
 
-	# gcloud kms keys create $(KMS_KEY) \
-	# 	--project $(PROJECT_ID) \
-	# 	--location $(REGION) \
-	# 	--keyring $(KMS_RING) \
-	# 	--purpose asymmetric-signing \
-	# 	--default-algorithm rsa-sign-pkcs1-4096-sha512
+	gcloud kms keys create $(KMS_KEY) \
+		--project $(PROJECT_ID) \
+		--location $(REGION) \
+		--keyring $(KMS_RING) \
+		--purpose asymmetric-signing \
+		--default-algorithm rsa-sign-pkcs1-4096-sha512
 
-	# gcloud kms keys describe $(KMS_KEY) \
-	# 	--project $(PROJECT_ID) \
-	# 	--location $(REGION) \
-	# 	--keyring $(KMS_RING) \
-	# 	--format json | jq --raw-output '.name'
+	gcloud kms keys describe $(KMS_KEY) \
+		--project $(PROJECT_ID) \
+		--location $(REGION) \
+		--keyring $(KMS_RING) \
+		--format json | jq --raw-output '.name'
 
 	curl "https://containeranalysis.googleapis.com/v1/projects/$(PROJECT_ID)/notes/?noteId=$(NAME)-note" \
 	--request "POST" \

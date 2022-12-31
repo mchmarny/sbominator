@@ -1,8 +1,8 @@
 substitutions:
   _APP_NAME: hello
   _PIPELINE_NAME: deploy-demo-pipeline
-  _POOL_NAME: demo-pool
-  _BIN_AUTHZ_ID: projects/cloudy-labz/attestors/sbominator
+  _BIN_AUTHZ_ID: projects/cloudy-tools/attestors/sbominator
+  _KMS_KEY: projects/cloudy-tools/locations/us-west1/keyRings/sbominator/cryptoKeys/sbominator-signer/cryptoKeyVersions/1
 
 steps:
 
@@ -34,12 +34,12 @@ steps:
 
   # Generate SBOM (includes vulnerability scan)
   - id: sbom
-    name: us-docker.pkg.dev/cloudy-demos/builders/sbom-builder:v0.3.6
+    name: us-docker.pkg.dev/cloudy-tools/builders/sbominator@sha256:d863f7bdf10e63f9f43298e73aad5886b87245827497b8333c038d6c1d2bdc58
     entrypoint: /bin/bash
     waitFor: ["publish"]
     env:
     - PROJECT=$PROJECT_ID
-    - KEY=$_KMS_KEY_NAME
+    - KEY=$_KMS_KEY
     - COMMIT=$COMMIT_SHA
     - VERSION=$TAG_NAME
     - ATTESTOR=$_BIN_AUTHZ_ID # optional - to add binary attestation
@@ -48,28 +48,9 @@ steps:
     - |
       builder $(/bin/cat image-digest.txt)
 
-  # Create release in Google Cloud Deploy
-  - id: release
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: /bin/bash
-    waitFor: ["policy"]
-    args:
-    - -c
-    - |
-      gcloud deploy releases create rel-${SHORT_SHA} \
-      --delivery-pipeline=${_PIPELINE_NAME} \
-      --region=${LOCATION} \
-      --annotations=commitId=${REVISION_ID} \
-      --images=${_APP_NAME}=$(/bin/cat image-digest.txt)
-
-images:
-- ${LOCATION}-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$_APP_NAME:$TAG_NAME
 
 options:
   requestedVerifyOption: VERIFIED # ensure attestation gen, provenance metadata, for this build
-  sourceProvenanceHash: ["SHA256"]
-  pool:
-    name: 'projects/$PROJECT_ID/locations/$LOCATION/workerPools/$_POOL_NAME'
 
 tags:
 - demo
