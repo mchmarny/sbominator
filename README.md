@@ -1,10 +1,10 @@
 # sbominator
 
-Custom build step for generating Software Bill of Materials (SBOM) for a container image. When added to your Google Cloud Build pipeline, it will:
+Custom build step for generating [Software Bill of Materials](https://www.cisa.gov/sbom) (SBOM) for a container image. When added to your [Google Cloud Build](https://cloud.google.com/build) pipeline, it will:
 
-* Sign an image using KMS key based on its digest
+* Sign an image using [KMS](https://cloud.google.com/security-key-management) key based on its digest
 * Create SBOM attestation ([JSON SPDX format](https://github.com/spdx/spdx-spec/blob/v2.2/schemas/spdx-schema.json)) 
-* (Optional) Create Binary Authorization attestation for a given attestor, and signs it with KMS key
+* (Optional) Create [Binary Authorization](https://cloud.google.com/binary-authorization) attestation for a given attestor, and signs it with KMS key
 
 ![](images/reg.png)
 
